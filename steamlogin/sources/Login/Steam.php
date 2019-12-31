@@ -20,13 +20,39 @@ class _Steam extends \IPS\Login\Handler
      */
     protected $_cachedUserData = [];
 
+    protected function getOpenID($what) {
+        $value = \IPS\Request::i()->{"openid_" . $what};
+
+        if (isset($value)) {
+            return $value;
+        }
+
+        $value = \IPS\Request::i()->{"openid." . $what};
+
+        if (isset($value)) {
+            return $value;
+        }
+
+        $what = str_replace('.', '_', $what);
+
+        $value = \IPS\Request::i()->{"openid_" . $what};
+
+        if (isset($value)) {
+            return $value;
+        }
+
+        $value = \IPS\Request::i()->{"openid." . $what};
+
+        return $value;
+    }
+
     /**
      * {@inheritdoc}
      */
     public function authenticateButton(\IPS\Login $login)
     {
         /* If we haven't been redirected back, redirect the user to external site */
-        if (!isset(\IPS\Request::i()->openid_ns)) {
+        if (!$this->getOpenID("ns")) {
             $returnUrl = $login->url->setQueryString([
                 '_processLogin' => $this->id,
                 'csrfKey'       => \IPS\Session::i()->csrfKey,
@@ -142,26 +168,19 @@ class _Steam extends \IPS\Login\Handler
     {
         $params = [
             'openid.ns'           => 'http://specs.openid.net/auth/2.0',
-            'openid.assoc_handle' => \IPS\Request::i()->openid_assoc_handle,
-            'openid.signed'       => \IPS\Request::i()->openid_signed,
-            'openid.sig'          => \IPS\Request::i()->openid_sig,
+            'openid.assoc_handle' => $this->getOpenID("assoc_handle"),
+            'openid.signed'       => $this->getOpenID("signed"),
+            'openid.sig'          => $this->getOpenID("sig"),
             'openid.mode'         => 'check_authentication'
         ];
 
         // Get all the params that were sent back and resend them for validation
         foreach (explode(',', $params['openid.signed']) as $item) {
-            // First some security checks, ensure the param exists before attempting to call it
-            $parameterName = 'openid_' . str_replace('.', '_', $item);
-
-            if (!isset(\IPS\Request::i()->$parameterName)) {
-                continue;
-            }
-
-            $params['openid.' . $item] = \IPS\Request::i()->$parameterName;
+            $params['openid.' . $item] = $this->getOpenID($item);
         }
 
         // Validate whether it's true and if we have a good ID
-        preg_match('#^https://steamcommunity.com/openid/id/(\d{17,25})#', \IPS\Request::i()->openid_claimed_id, $matches);
+        preg_match('#^https://steamcommunity.com/openid/id/(\d{17,25})#', $this->getOpenID("claimed_id"), $matches);
         $steamID64 = is_numeric($matches[1]) ? $matches[1] : 0;
 
         try {
